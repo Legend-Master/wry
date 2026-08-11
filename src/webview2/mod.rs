@@ -951,12 +951,16 @@ impl InnerWebView {
       ),
     )?;
 
-    let ipc_handler = attributes.ipc_handler.take();
+    let Some(ipc_handler) = attributes.ipc_handler.take() else {
+      return Ok(());
+    };
     webview.add_WebMessageReceived(
-      &WebMessageReceivedEventHandler::create(Box::new(move |_, args| {
-        let (Some(args), Some(ipc_handler)) = (args, &ipc_handler) else {
+      &WebMessageReceivedEventHandler::create(Box::new(move |webview, args| {
+        let (Some(webview), Some(args)) = (webview, args) else {
           return Ok(());
         };
+
+        let _ = handle_file_path_query(webview, &args);
 
         let url = {
           let mut url = PWSTR::null();
@@ -1428,6 +1432,29 @@ impl InnerWebView {
 
     Ok(())
   }
+}
+
+fn handle_file_path_query(
+  webview: ICoreWebView2,
+  args: &ICoreWebView2WebMessageReceivedEventArgs,
+) -> windows_core::Result<()> {
+  if let Ok(args2) = args.cast::<ICoreWebView2WebMessageReceivedEventArgs2>() {
+    let objs = unsafe { args2.AdditionalObjects() }?;
+    let mut count = 0;
+    unsafe { objs.Count(&mut count)? };
+
+    let mut out = Vec::with_capacity(count as _);
+
+    for idx in 0..count {
+      let file: ICoreWebView2File = unsafe { objs.GetValueAtIndex(idx) }?.cast()?;
+      let mut path = PWSTR::null();
+      unsafe { file.Path(&mut path)? };
+      let path = take_pwstr(path);
+      out.push(path);
+    }
+    InnerWebView::execute_script(&webview, &format!("console.log({out:?})"), |_| {})?;
+  }
+  Ok(())
 }
 
 /// Public APIs

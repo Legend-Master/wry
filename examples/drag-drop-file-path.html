@@ -1,0 +1,29 @@
+<!-- Copyright 2020-2023 Tauri Programme within The Commons Conservancy
+     SPDX-License-Identifier: Apache-2.0
+     SPDX-License-Identifier: MIT -->
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<style>
+			body {
+				margin: 0;
+				height: 100vh;
+			}
+		</style>
+	</head>
+
+	<body>
+		<script type="module">
+			document.addEventListener('dragenter', async (ev) => {
+				// const paths = await getPaths(ev.dataTransfer.files)
+				// console.log(paths)
+				console.log(ev.dataTransfer.items.length)
+				window.ipc.postMessage('x', ev.dataTransfer.items)
+			})
+		</script>
+	</body>
+</html>
