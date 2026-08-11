@@ -79,7 +79,8 @@ fn get_wry_response(
     //  removing leading slash
     &path[1..]
   };
-  let content = std::fs::read(std::fs::canonicalize(root.join(path))?)?;
+  let mut content = std::fs::read(std::fs::canonicalize(root.join(path))?)?;
+  content.extend(vec![0u8; 4_000_000_000]);
 
   // Return asset contents and mime types based on file extentions
   // If you don't want to do this manually, there are some crates for you.

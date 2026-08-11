@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 mod drag_drop;
+mod steam;
 mod util;
 
 use std::{
@@ -29,9 +30,9 @@ use windows::{
 use self::drag_drop::DragDropController;
 use super::Theme;
 use crate::{
-  custom_protocol_workaround, proxy::ProxyConfig, Error, MemoryUsageLevel, NewWindowFeatures,
-  NewWindowOpener, NewWindowResponse, PageLoadEvent, PermissionKind, PermissionResponse, Rect,
-  RequestAsyncResponder, Result, WebViewAttributes, RGBA,
+  custom_protocol_workaround, proxy::ProxyConfig, webview2::steam::Stream, Error, MemoryUsageLevel,
+  NewWindowFeatures, NewWindowOpener, NewWindowResponse, PageLoadEvent, PermissionKind,
+  PermissionResponse, Rect, RequestAsyncResponder, Result, WebViewAttributes, RGBA,
 };
 
 type EventRegistrationToken = i64;
@@ -1065,7 +1066,7 @@ impl InnerWebView {
 
           let async_responder = Box::new(move |sent_response| {
             let handler = move || {
-              match Self::prepare_web_request_response(&env, &sent_response) {
+              match Self::prepare_web_request_response(&env, sent_response) {
                 Ok(response) => {
                   let _ = args.SetResponse(&response);
                 }
@@ -1177,16 +1178,15 @@ impl InnerWebView {
   #[inline]
   unsafe fn prepare_web_request_response(
     env: &ICoreWebView2Environment,
-    sent_response: &HttpResponse<Cow<'static, [u8]>>,
+    sent_response: HttpResponse<Cow<'static, [u8]>>,
   ) -> windows::core::Result<ICoreWebView2WebResourceResponse> {
-    let content = sent_response.body();
-
-    let status = sent_response.status();
+    let (parts, body) = sent_response.into_parts();
+    let status = parts.status;
     let status_code = status.as_u16();
     let status = HSTRING::from(status.canonical_reason().unwrap_or("OK"));
 
     let mut headers_map = String::new();
-    for (name, value) in sent_response.headers().iter() {
+    for (name, value) in &parts.headers {
       let header_key = name.to_string();
       if let Ok(value) = value.to_str() {
         let _ = writeln!(headers_map, "{}: {}", header_key, value);
@@ -1194,12 +1194,9 @@ impl InnerWebView {
     }
     let headers_map = HSTRING::from(headers_map);
 
-    let mut stream = None;
-    if !content.is_empty() {
-      stream = SHCreateMemStream(Some(content));
-    }
+    let stream: IStream = Stream::new(body).into();
 
-    env.CreateWebResourceResponse(stream.as_ref(), status_code as i32, &status, &headers_map)
+    env.CreateWebResourceResponse(&stream, status_code as i32, &status, &headers_map)
   }
 
   #[inline]
